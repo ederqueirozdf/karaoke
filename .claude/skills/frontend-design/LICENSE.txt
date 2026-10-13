@@ -1,0 +1,6 @@
+This workspace includes a local copy of the frontend-design skill adapted from Anthropic's Claude Code plugin repository.
+
+The original upstream skill is available at:
+https://github.com/anthropics/claude-code/tree/main/plugins/frontend-design
+
+This file is included to satisfy the local skill metadata reference and to preserve the project-local copy of the guidance. Please respect the upstream project's licensing and redistribution terms when using or redistributing the original content.

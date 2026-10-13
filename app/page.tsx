@@ -328,6 +328,7 @@ export default function Home() {
   const [voiceAnalysis, setVoiceAnalysis] = useState<VoiceAnalysis | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [playbackStarted, setPlaybackStarted] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [performanceStatus, setPerformanceStatus] = useState("");
   const [recordingStatus, setRecordingStatus] = useState("Selecione o cantor e a música para iniciar");
 
@@ -335,6 +336,7 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const youtubePlayerRef = useRef<any>(null);
+  const progressIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -395,8 +397,54 @@ export default function Home() {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         mediaRecorderRef.current.stop();
       }
+
+      if (progressIntervalRef.current) {
+        window.clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!playbackStarted || !youtubePlayerRef.current) {
+      if (progressIntervalRef.current) {
+        window.clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const updateProgress = () => {
+      const player = youtubePlayerRef.current;
+      if (!player || typeof player.getCurrentTime !== "function") {
+        return;
+      }
+
+      const currentTime = Number(player.getCurrentTime?.() ?? 0);
+      const duration = Number(player.getDuration?.() ?? 0);
+
+      if (!duration) {
+        return;
+      }
+
+      const nextProgress = Math.min((currentTime / duration) * 100, 100);
+      setVideoProgress(nextProgress);
+
+      if (nextProgress >= 90 && !videoCompleted) {
+        setPerformanceStatus("90% do vídeo concluído. Você pode finalizar a avaliação.");
+      }
+    };
+
+    updateProgress();
+    progressIntervalRef.current = window.setInterval(updateProgress, 500);
+
+    return () => {
+      if (progressIntervalRef.current) {
+        window.clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    };
+  }, [playbackStarted, videoCompleted]);
 
   const songUsageCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -498,6 +546,7 @@ export default function Home() {
         }
         youtubePlayerRef.current = null;
       }
+      setVideoProgress(0);
       return;
     }
 
@@ -535,6 +584,7 @@ export default function Home() {
           },
           onStateChange: (event: any) => {
             if (event.data === (window as any).YT.PlayerState.ENDED) {
+              setVideoProgress(100);
               void handleVideoFinished();
             }
           },
@@ -804,6 +854,7 @@ export default function Home() {
     }
 
     setVideoCompleted(false);
+    setVideoProgress(0);
     setPlaybackStarted(true);
     setPerformanceStatus("");
     setRecordingStatus("Preparando vídeo e gravação...");
@@ -822,6 +873,7 @@ export default function Home() {
 
   const handleVideoFinished = async () => {
     setVideoCompleted(true);
+    setVideoProgress(100);
     setPlaybackStarted(false);
     setPerformanceStatus("Vídeo finalizado. Finalize a avaliação desta performance.");
     setRecordingStatus("Vídeo finalizado. Finalize a avaliação desta performance.");
@@ -830,6 +882,11 @@ export default function Home() {
 
   const handleFinalizePerformance = async () => {
     if (!selectedPerformerId || !selectedSongId) {
+      return;
+    }
+
+    if (videoProgress < 90 && !videoCompleted) {
+      setRecordingStatus("Assista pelo menos 90% do vídeo para liberar a avaliação.");
       return;
     }
 
@@ -906,7 +963,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(124,58,237,0.28),_transparent_35%),linear-gradient(135deg,_#020617_0%,_#0f172a_35%,_#111827_100%)] px-4 py-8 text-slate-50">
+    <main className="min-h-screen px-4 py-8 text-[#f8f4ee]">
       <div className="mx-auto max-w-7xl">
         {showStartConfirmation && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
@@ -949,42 +1006,50 @@ export default function Home() {
           </div>
         )}
 
-        <header className="relative mb-8 overflow-hidden rounded-[28px] border border-violet-500/25 bg-slate-900/80 p-6 shadow-[0_0_50px_rgba(124,58,237,0.18)] backdrop-blur-xl">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(236,72,153,0.18),_transparent_30%)]" />
-          <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="flex flex-col gap-1">
-              <div className="text-xs font-black uppercase tracking-[0.38em] text-yellow-300 md:text-sm">
-                Karaoke dos Primos
+        <header className="relative mb-8 overflow-hidden rounded-[36px] border border-amber-300/40 bg-[#0b1320]/95 p-4 shadow-[0_0_0_1px_rgba(251,191,36,0.17),0_30px_90px_rgba(251,191,36,0.18),0_0_60px_rgba(251,191,36,0.12)] backdrop-blur-xl md:p-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,_rgba(251,191,36,0.38),_transparent_22%),radial-gradient(circle_at_85%_25%,_rgba(52,211,153,0.18),_transparent_24%),radial-gradient(circle_at_50%_120%,_rgba(244,114,182,0.12),_transparent_30%)]" />
+          <div className="absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:24px_24px]" />
+          <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-amber-200/60 bg-gradient-to-br from-amber-200 via-yellow-400 to-amber-600 text-3xl text-slate-950 shadow-[0_0_30px_rgba(251,191,36,0.55)] md:h-20 md:w-20">
+                ♪
               </div>
-              <h1 className="text-2xl font-black uppercase tracking-[0.1em] text-white md:text-4xl">
-                PRIMOS DF GO RN
-              </h1>
+              <div className="flex flex-col gap-2">
+                <div className="text-[10px] font-black uppercase tracking-[0.44em] text-amber-100 md:text-xs">
+                  Karaoke dos Primos
+                </div>
+                <h1 className="text-3xl font-black uppercase leading-none tracking-[0.12em] text-[#fff6dd] drop-shadow-[0_0_22px_rgba(251,191,36,0.35)] md:text-5xl">
+                  PRIMOS
+                  <span className="mt-1 block text-amber-300">10 ANOS</span>
+                </h1>
+              </div>
             </div>
-            <div className="flex gap-3 text-sm text-slate-300">
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/90 px-4 py-3 shadow-lg shadow-slate-950/40">
-                <div className="text-slate-400">Cantores</div>
-                <div className="text-xl font-bold text-white">{performers.length}</div>
+
+            <div className="flex flex-wrap gap-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-amber-400/30 bg-slate-950/75 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_18px_rgba(251,191,36,0.08)]">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-amber-200">Cantores</div>
+                <div className="mt-1 text-xl font-bold text-white">{performers.length}</div>
               </div>
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/90 px-4 py-3 shadow-lg shadow-slate-950/40">
-                <div className="text-slate-400">Músicas</div>
-                <div className="text-xl font-bold text-white">{catalogSongs.length}</div>
+              <div className="rounded-2xl border border-emerald-400/30 bg-slate-950/75 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_18px_rgba(52,211,153,0.08)]">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-emerald-200">Músicas</div>
+                <div className="mt-1 text-xl font-bold text-white">{catalogSongs.length}</div>
               </div>
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/90 px-4 py-3 shadow-lg shadow-slate-950/40">
-                <div className="text-slate-400">Avaliações</div>
-                <div className="text-xl font-bold text-white">{performances.length}</div>
+              <div className="rounded-2xl border border-rose-400/30 bg-slate-950/75 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_18px_rgba(244,114,182,0.08)]">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-rose-200">Avaliações</div>
+                <div className="mt-1 text-xl font-bold text-white">{performances.length}</div>
               </div>
             </div>
           </div>
         </header>
 
-        <div className="mb-8 flex flex-wrap gap-3 rounded-3xl border border-slate-800 bg-slate-900/90 p-3">
+        <div className="mb-8 flex flex-wrap gap-3 rounded-[24px] border border-amber-500/15 bg-[#101a28]/90 p-3 shadow-[0_10px_40px_rgba(15,23,42,0.4)]">
           <button
             type="button"
             onClick={() => setActiveView("admin")}
             className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
               activeView === "admin"
-                ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                ? "bg-amber-400 text-slate-950 shadow-[0_18px_35px_rgba(251,191,36,0.22)]"
+                : "bg-slate-950 text-slate-200 ring-1 ring-white/5 hover:bg-slate-800"
             }`}
           >
             Administração
@@ -994,18 +1059,18 @@ export default function Home() {
             onClick={() => setActiveView("karaoke")}
             className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
               activeView === "karaoke"
-                ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                ? "bg-emerald-400 text-slate-950 shadow-[0_18px_35px_rgba(52,211,153,0.22)]"
+                : "bg-slate-950 text-slate-200 ring-1 ring-white/5 hover:bg-slate-800"
             }`}
           >
             Tela de karaoke
           </button>
         </div>
 
-        <div className="mb-8 rounded-[28px] border border-slate-800 bg-slate-900/90 p-5 shadow-lg shadow-slate-950/40">
+        <div className="mb-8 rounded-[30px] border border-amber-400/20 bg-[#0f1a29]/90 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.5),0_0_35px_rgba(251,191,36,0.08)]">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-violet-200">
+              <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-200">
                 Ranking
               </div>
               <h2 className="mt-2 text-xl font-semibold text-white">Melhores cantores</h2>
@@ -1022,8 +1087,8 @@ export default function Home() {
                   onClick={() => setActiveRankingView(item.key)}
                   className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
                     activeRankingView === item.key
-                      ? "border-violet-400 bg-violet-500 text-white"
-                      : "border-slate-700 bg-slate-950 text-slate-300 hover:border-violet-500/50"
+                      ? "border-amber-300 bg-amber-400 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.25)]"
+                      : "border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-300/50"
                   }`}
                 >
                   {item.label}
@@ -1038,10 +1103,10 @@ export default function Home() {
               .map((entry, index) => (
                 <div
                   key={`${activeRankingView}-${entry.performer.id}`}
-                  className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2.5"
+                  className="flex items-center justify-between rounded-2xl border border-white/8 bg-slate-950/70 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/20 text-sm font-bold text-violet-200">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400/15 text-sm font-bold text-amber-100 ring-1 ring-amber-400/30">
                       #{index + 1}
                     </div>
                     <div>
@@ -1312,42 +1377,57 @@ export default function Home() {
         ) : showPlaybackScreen ? (
           <section className="space-y-6">
             {selectedSong ? (
-              <div className="overflow-hidden rounded-[30px] border border-violet-500/20 bg-slate-900/90 p-4 shadow-[0_0_35px_rgba(124,58,237,0.16)] md:p-5">
+              <div className="overflow-hidden rounded-[32px] border border-amber-500/20 bg-gradient-to-br from-[#101a28] via-[#0c1522] to-[#090d14] p-4 shadow-[0_26px_70px_rgba(251,191,36,0.12)] md:p-5">
                 <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-cyan-300">Reprodução</p>
-                    <h3 className="mt-2 text-2xl font-black text-white md:text-3xl">
-                      {selectedSong.title}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-400">{selectedSong.artist}</p>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/15 text-lg font-black text-amber-100 ring-1 ring-amber-400/30">
+                      ♪
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.28em] text-amber-200">Palco active</p>
+                      <h3 className="mt-2 text-2xl font-black text-[#fff6dd] md:text-3xl">
+                        {selectedSong.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-300">{selectedSong.artist}</p>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setShowPlaybackScreen(false);
                       setPlaybackStarted(false);
+                      setVideoProgress(0);
                       setPerformanceStatus("");
                       setVoiceAnalysis(null);
                       setRecordingStatus("Selecione uma música para iniciar");
                     }}
-                    className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500"
+                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:border-amber-300/40 hover:text-amber-100"
                   >
                     Voltar à lista
                   </button>
                 </div>
 
-                <div className="overflow-hidden rounded-[30px] border border-violet-500/20 bg-black shadow-[0_0_45px_rgba(168,85,247,0.20)]">
+                <div className="overflow-hidden rounded-[30px] border border-amber-400/20 bg-[#020617] shadow-[0_0_45px_rgba(251,191,36,0.14)]">
                   <div className="relative mx-auto aspect-video w-full max-w-[1400px]">
                     {playbackStarted || videoCompleted ? (
                       <div id="karaoke-player" className="h-full w-full" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.22),_rgba(15,23,42,0.9))] p-6 text-center">
-                        <div>
-                          <div className="mb-3 text-xs uppercase tracking-[0.25em] text-violet-200">
+                      <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_center,_rgba(251,191,36,0.14),_rgba(15,23,42,0.96))] p-6 text-center">
+                        <div className="max-w-md">
+                          <div className="mb-3 text-[10px] uppercase tracking-[0.34em] text-amber-200">
                             Pronto para começar
                           </div>
-                          <div className="text-xl font-semibold text-white">
-                            Selecione o cantor e clique em reproduzir
+                          <div className="text-2xl font-black text-[#fff6dd] md:text-3xl">
+                            {selectedPerformerId ? (
+                              <>
+                                {performers.find((item) => item.id === selectedPerformerId)?.name ?? "Cantor"}
+                              </>
+                            ) : (
+                              "Selecione o cantor"
+                            )}
+                          </div>
+                          <div className="mt-3 text-sm text-slate-300">
+                            Clique em reproduzir para subir ao palco e gravar a voz.
                           </div>
                         </div>
                       </div>
@@ -1355,16 +1435,16 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                <div className="mt-5 space-y-4 rounded-[26px] border border-white/8 bg-slate-950/65 p-4 md:p-5">
                   <div>
-                    <label htmlFor="performancePerformer" className="mb-2 block text-sm text-slate-300">
+                    <label htmlFor="performancePerformer" className="mb-2 block text-sm font-medium text-slate-200">
                       Selecionar cantor
                     </label>
                     <select
                       id="performancePerformer"
                       value={selectedPerformerId}
                       onChange={(event) => setSelectedPerformerId(event.target.value)}
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-3 text-white focus:border-violet-400 focus:outline-none"
+                      className="w-full rounded-2xl border border-white/10 bg-[#0b1220] px-3 py-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] focus:border-amber-400 focus:outline-none"
                     >
                       <option value="">Selecione um cantor</option>
                       {performers.map((performer) => (
@@ -1375,13 +1455,14 @@ export default function Home() {
                     </select>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                     <button
                       type="button"
                       onClick={() => {
                         if (playbackStarted) {
                           handleVoiceCapture(false);
                           setPlaybackStarted(false);
+                          setVideoProgress(0);
                           setPerformanceStatus("");
                           setVideoCompleted(false);
                           setVoiceAnalysis(null);
@@ -1398,10 +1479,10 @@ export default function Home() {
                         setShowStartConfirmation(true);
                       }}
                       disabled={!selectedSongId}
-                      className={`rounded-2xl border px-4 py-3 font-semibold transition ${
+                      className={`rounded-2xl border px-4 py-3 text-sm font-black uppercase tracking-[0.12em] transition md:text-base ${
                         playbackStarted
-                          ? "border-rose-400 bg-rose-500/20 text-rose-100"
-                          : "border-cyan-400/70 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          ? "border-rose-400 bg-rose-500/15 text-rose-100 shadow-[0_0_24px_rgba(251,113,133,0.18)]"
+                          : "border-emerald-400/70 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                       }`}
                     >
                       {playbackStarted ? "Parar gravação" : "Play e gravar"}
@@ -1410,15 +1491,27 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={handleFinalizePerformance}
-                      disabled={!selectedPerformerId || !videoCompleted}
-                      className="rounded-2xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                      disabled={!selectedPerformerId || (!videoCompleted && videoProgress < 90)}
+                      className="rounded-2xl bg-gradient-to-r from-emerald-400 to-green-300 px-4 py-3 text-sm font-black uppercase tracking-[0.12em] text-slate-950 shadow-[0_20px_35px_rgba(52,211,153,0.25)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400"
                     >
                       Finalizar
                     </button>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-300">
-                    {recordingStatus}
+                  <div className="space-y-2 rounded-2xl border border-amber-500/20 bg-[#0b1220] p-3 text-sm text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                      <span>Progresso do vídeo</span>
+                      <span>{Math.round(videoProgress)}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          videoProgress >= 90 ? "bg-emerald-400" : "bg-amber-400"
+                        }`}
+                        style={{ width: `${Math.min(videoProgress, 100)}%` }}
+                      />
+                    </div>
+                    <div>{recordingStatus}</div>
                   </div>
 
                   {performanceStatus && (
@@ -1440,8 +1533,8 @@ export default function Home() {
                         { label: "Estabilidade", value: `${voiceAnalysis.stability}/10` },
                         { label: "Clareza", value: `${voiceAnalysis.clarity}/10` },
                       ].map((metric) => (
-                        <div key={metric.label} className="rounded-2xl border border-violet-500/25 bg-violet-500/10 p-3 text-center">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-violet-200">{metric.label}</div>
+                        <div key={metric.label} className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-center">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200">{metric.label}</div>
                           <div className="mt-2 text-xl font-bold text-white">{metric.value}</div>
                         </div>
                       ))}
@@ -1463,10 +1556,13 @@ export default function Home() {
           </section>
         ) : (
           <section className="space-y-6">
-              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <div className="rounded-[30px] border border-amber-400/20 bg-[#0f1a29]/90 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.5),0_0_35px_rgba(251,191,36,0.08)]">
               <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Selecione uma música</h2>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-200">
+                    Catálogo
+                  </div>
+                  <h2 className="mt-2 text-xl font-semibold text-white">Selecione uma música</h2>
                   <p className="mt-1 text-sm text-slate-400">
                     {filteredCatalog.length} músicas encontradas para {selectedGenre}
                   </p>
@@ -1483,7 +1579,7 @@ export default function Home() {
                     value={songSearchTerm}
                     onChange={(event) => setSongSearchTerm(event.target.value)}
                     placeholder="Digite o título, artista ou gênero..."
-                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-3 text-white placeholder:text-slate-500 focus:border-violet-400 focus:outline-none"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-3 text-white placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
                   />
                 </div>
 
@@ -1497,8 +1593,8 @@ export default function Home() {
                         onClick={() => setSortBy(item)}
                         className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
                           sortBy === item
-                            ? "border-violet-400 bg-violet-500 text-white shadow-lg shadow-violet-500/20"
-                            : "border-slate-700 bg-slate-950 text-slate-300 hover:border-violet-500/50"
+                            ? "border-amber-300 bg-amber-400 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.25)]"
+                            : "border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-300/50"
                         }`}
                       >
                         {item === "usadas" && "Mais usadas"}
@@ -1524,8 +1620,8 @@ export default function Home() {
                     }}
                     className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
                       selectedGenre === genre
-                        ? "border-violet-400 bg-violet-500 text-white shadow-lg shadow-violet-500/20"
-                        : "border-slate-700 bg-slate-950 text-slate-300 hover:border-violet-500/60"
+                        ? "border-amber-300 bg-amber-400 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.25)]"
+                        : "border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-300/60"
                     }`}
                   >
                     {genre}
@@ -1544,8 +1640,8 @@ export default function Home() {
                       key={song.id}
                       className={`rounded-2xl border p-3 transition ${
                         selectedSongId === song.id
-                          ? "border-violet-400 bg-violet-500/10"
-                          : "border-slate-800 bg-slate-950"
+                          ? "border-amber-300 bg-amber-400/8 shadow-[0_0_16px_rgba(251,191,36,0.18)]"
+                          : "border-white/8 bg-slate-950/70"
                       }`}
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1557,7 +1653,7 @@ export default function Home() {
                           <img
                             src={`https://img.youtube.com/vi/${youtubeVideoId(song.youtubeUrl)}/hqdefault.jpg`}
                             alt={song.title}
-                            className="h-16 w-24 rounded-xl object-cover"
+                            className="h-16 w-24 rounded-xl object-cover ring-1 ring-white/10"
                           />
                           <div className="min-w-0">
                             <div className="truncate text-base font-semibold text-white">{song.title}</div>
@@ -1589,7 +1685,7 @@ export default function Home() {
                               setSelectedSongId(song.id);
                               setShowPlaybackScreen(true);
                             }}
-                            className="rounded-2xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                            className="rounded-2xl bg-gradient-to-r from-emerald-400 to-green-300 px-3 py-2 text-sm font-semibold text-slate-950 shadow-[0_18px_30px_rgba(52,211,153,0.22)] transition hover:brightness-110"
                           >
                             Dar o play
                           </button>
