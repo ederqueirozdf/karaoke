@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Performer {
+  id        String      @id @default(cuid())
+  name      String
+  type      String
+  createdAt DateTime    @default(now())
+  scores    Performance[]
+
+  @@unique([name, type])
+}
+
+model CatalogSong {
+  id        String      @id @default(cuid())
+  title     String
+  artist    String
+  genre     String
+  youtubeUrl String
+  bpm       Int
+  difficulty String
+  createdAt DateTime    @default(now())
+  scores    Performance[]
+
+  @@unique([title, artist])
+}
+
+model Performance {
+  id         String       @id @default(cuid())
+  performerId String
+  catalogId   String
+  title       String
+  genre       String
+  youtubeUrl  String
+  note        Float
+  createdAt   DateTime     @default(now())
+
+  performer Performer @relation(fields: [performerId], references: [id], onDelete: Cascade)
+  catalog   CatalogSong @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+}
