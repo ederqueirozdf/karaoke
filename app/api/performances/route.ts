@@ -46,3 +46,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Erro ao salvar avaliação." }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id")?.trim();
+    const all = searchParams.get("all") === "true";
+
+    if (all) {
+      await prisma.performance.deleteMany();
+      return NextResponse.json({ success: true });
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: "ID da avaliação é obrigatório." }, { status: 400 });
+    }
+
+    await prisma.performance.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Erro ao remover avaliação:", error);
+    return NextResponse.json({ error: "Erro ao remover avaliação." }, { status: 500 });
+  }
+}

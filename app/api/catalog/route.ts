@@ -48,3 +48,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Erro ao salvar música." }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id")?.trim();
+
+    if (!id) {
+      return NextResponse.json({ error: "ID da música é obrigatório." }, { status: 400 });
+    }
+
+    await prisma.catalogSong.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Erro ao remover música:", error);
+    return NextResponse.json({ error: "Erro ao remover música." }, { status: 500 });
+  }
+}
